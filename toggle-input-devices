@@ -9,6 +9,7 @@ METHOD_SET="org.freedesktop.DBus.Properties.Set"
 # sudo libinput list-devices
 declare -A devices=(
     ["SynPS/2 Synaptics TouchPad"]=''
+    ["Touchpad"]=''
     ["AT Translated Set 2 keyboard"]=''
     ["HP WMI hotkeys"]=''
 )
@@ -17,11 +18,11 @@ find_devices() {
     local DM_INTERFACE="org.kde.KWin.InputDeviceManager"
     local DM_PROPERTY="devicesSysNames"
 
-    for sysname in $(qdbus "$SERVICE" "$DBUS_PATH" "$METHOD_GET" "$DM_INTERFACE" "$DM_PROPERTY"); do
-        name=$(qdbus "$SERVICE" "${DBUS_PATH}/${sysname}" "$METHOD_GET" "$INTERFACE" name)
+    for sysname in $(qdbus6 "$SERVICE" "$DBUS_PATH" "$METHOD_GET" "$DM_INTERFACE" "$DM_PROPERTY"); do
+        name=$(qdbus6 "$SERVICE" "${DBUS_PATH}/${sysname}" "$METHOD_GET" "$INTERFACE" name)
 
         for device in "${!devices[@]}"; do
-            if [ "$name" == "$device" ]; then
+            if [ "$name" == "*$device*" ]; then
                 devices["$device"]="$sysname"
             fi
         done
@@ -41,11 +42,11 @@ check_devices() {
 }
 
 get_device_status() {
-    qdbus "$SERVICE" "${DBUS_PATH}/$1" "$METHOD_GET" "$INTERFACE" "enabled"
+    qdbus6 "$SERVICE" "${DBUS_PATH}/$1" "$METHOD_GET" "$INTERFACE" "enabled"
 }
 
 set_device_status() {
-    qdbus "$SERVICE" "${DBUS_PATH}/$1" "$METHOD_SET" "$INTERFACE" "enabled" "$2"
+    qdbus6 "$SERVICE" "${DBUS_PATH}/$1" "$METHOD_SET" "$INTERFACE" "enabled" "$2"
 }
 
 toggle_device() {
