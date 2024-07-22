@@ -1,5 +1,7 @@
-#!/bin/sh
+#!/usr/bin/env bash
+# For KDE6, wayland and minibook X
 
+CWDDIR=$(cd "$(dirname "$0")" || return; pwd)
 #
 # auto-rotate the screen and pointers
 # copyright 2018 Don Bowman (db@donbowman.ca)
@@ -8,88 +10,106 @@
 DISPLAY=:0
 export DISPLAY
 
-install_background() {
+# install_background() {
 
-    export BACKDROP=~/.config/auto-rotate/${1}.jpg
-    if [ -f "$BACKDROP" ]
-    then
-cat << EOF | sh
-    dbus-send --session --dest=org.kde.plasmashell --type=method_call /PlasmaShell org.kde.PlasmaShell.evaluateScript 'string:
-    var Desktops = desktops();
-    for (i=0;i<Desktops.length;i++) {
-            d = Desktops[i];
-            d.wallpaperPlugin = "org.kde.image";
-            d.currentConfigGroup = Array("Wallpaper",
-                                        "org.kde.image",
-                                        "General");
-            d.writeConfig("Image", "file://$BACKDROP");
-    }'
-EOF
-    fi
+#     export BACKDROP=~/.config/auto-rotate/${1}.jpg
+#     if [ -f "$BACKDROP" ]
+#     then
+# cat << EOF | sh
+#     dbus-send --session --dest=org.kde.plasmashell --type=method_call /PlasmaShell org.kde.PlasmaShell.evaluateScript 'string:
+#     var Desktops = desktops();
+#     for (i=0;i<Desktops.length;i++) {
+#             d = Desktops[i];
+#             d.wallpaperPlugin = "org.kde.image";
+#             d.currentConfigGroup = Array("Wallpaper",
+#                                         "org.kde.image",
+#                                         "General");
+#             d.writeConfig("Image", "file://$BACKDROP");
+#     }'
+# EOF
+#     fi
 
-}
+# }
 
-rotate_cursor() {
-    pointers=$(xinput list | mawk -W interactive '/Virtual core pointer/ { printing=1 } /Virtual core keyboard/ { printing=0} { if (printing && (match($0, /ELAN/) || match($0, /Pen/) || match($0, /Finger/) || match($0, /Touch/) )) { gsub(".*id=",""); print $1 } }')
-    echo "rotate -- pointers: <<$pointers>> matrix: <<$*>>"
-    for p in $pointers
-    do
-        xinput set-prop "$p" "Coordinate Transformation Matrix" "$@"
-    done
-}
+# rotate_cursor() {
+#     pointers=$(xinput list | mawk -W interactive '/Virtual core pointer/ { printing=1 } /Virtual core keyboard/ { printing=0} { if (printing && (match($0, /ELAN/) || match($0, /Pen/) || match($0, /Finger/) || match($0, /Touch/) )) { gsub(".*id=",""); print $1 } }')
+#     echo "rotate -- pointers: <<$pointers>> matrix: <<$*>>"
+#     for p in $pointers
+#     do
+#         xinput set-prop "$p" "Coordinate Transformation Matrix" "$@"
+#     done
+# }
 
-remove_keyboard(){
-    keyboard=$(xinput list | mawk -W interactive '/Virtual core pointer/ { printing=0 } /Virtual core keyboard/ { printing=1} { if (printing && (match($0, /AT Translated Set 2 keyboard/))) { gsub(".*id=",""); print $1 } }')
-    xinput ${1} $keyboard
-    echo Keyboard ${1}"d"
-}
+# remove_keyboard(){
+#     # FIXME: mawk
+#     keyboard=$(xinput list | mawk -W interactive '/Virtual core pointer/ { printing=0 } /Virtual core keyboard/ { printing=1} { if (printing && (match($0, /AT Translated Set 2 keyboard/))) { gsub(".*id=",""); print $1 } }')
+#     xinput ${1} $keyboard
+#     echo Keyboard ${1}"d"
+# }
 
 
-MAIN_SCREEN=$(xrandr --current | grep connected | mawk -W interactive '/primary/ {print $1}')
-echo "$MAIN_SCREEN"
-monitor-sensor | mawk -W interactive '/Accelerometer orientation changed:/ { print $NF; fflush();}' | while read -r line
+MAIN_SCREEN=1
+# MAIN_SCREEN=$(xrandr --current | grep connected | mawk -W interactive '/primary/ {print $1}')
+# echo "$MAIN_SCREEN"
+# FIXME: mawk -> awk
+#monitor-sensor | mawk -W interactive '/Accelerometer orientation changed:/ { print $NF; fflush();}' | while read -r line
+monitor-sensor | perl -ne 'BEGIN {$|=1;} print "$1\n" if(/Has accelerometer \(orientation: (.+)\)/); print "$1\n" if(/Accelerometer orientation changed: (.+)/)' | while read -r line
 do
     echo "$line"
     # If we have external monitor connected, do not rotate
-    nscreens=$(xrandr  | grep -c " connected")
+    #nscreens=$(xrandr  | grep -c " connected")
+    nscreens=$(kscreen-doctor -o | grep -c "^Output: ")
     if [ "$nscreens" != 1 ]
     then
-        line=normal
+        #line=normal
+        line=right-up
     fi
 
     # Set the actions to be taken for each possible orientation
     case "$line" in
         normal)
-            # re-enable backlight
-            dbus-send --print-reply=literal --type=method_call --system --dest=org.freedesktop.UPower /org/freedesktop/UPower/KbdBacklight org.freedesktop.UPower.KbdBacklight.SetBrightness int32:1
-            remove_keyboard enable
-            xrandr --output "$MAIN_SCREEN" --rotate normal
-            rotate_cursor 1 0 0 0 1 0 0 0 1
-            install_background normal
+            # # re-enable backlight
+            # dbus-send --print-reply=literal --type=method_call --system --dest=org.freedesktop.UPower /org/freedesktop/UPower/KbdBacklight org.freedesktop.UPower.KbdBacklight.SetBrightness int32:1
+            # disable backlight
+            dbus-send --print-reply=literal --type=method_call --system --dest=org.freedesktop.UPower /org/freedesktop/UPower/KbdBacklight org.freedesktop.UPower.KbdBacklight.SetBrightness int32:0
+            #remove_keyboard enable
+            "$CWDDIR"/toggle-input-devices.sh disable
+            kscreen-doctor output.$MAIN_SCREEN.rotation.normal
+            # xrandr --output "$MAIN_SCREEN" --rotate normal
+            # rotate_cursor 1 0 0 0 1 0 0 0 1
+            # install_background normal
             ;;
         bottom-up)
             # disable backlight
             dbus-send --print-reply=literal --type=method_call --system --dest=org.freedesktop.UPower /org/freedesktop/UPower/KbdBacklight org.freedesktop.UPower.KbdBacklight.SetBrightness int32:0
-            remove_keyboard disable
-            xrandr --output "$MAIN_SCREEN" --rotate inverted
-            rotate_cursor -1 0 1 0 -1 1 0 0 1
-            install_background bottom-up
+            # remove_keyboard disable
+            "$CWDDIR"/toggle-input-devices.sh disable
+            kscreen-doctor output.$MAIN_SCREEN.rotation.inverted
+            # xrandr --output "$MAIN_SCREEN" --rotate inverted
+            # rotate_cursor -1 0 1 0 -1 1 0 0 1
+            # install_background bottom-up
             ;;
         right-up)
             # disable backlight
-            dbus-send --print-reply=literal --type=method_call --system --dest=org.freedesktop.UPower /org/freedesktop/UPower/KbdBacklight org.freedesktop.UPower.KbdBacklight.SetBrightness int32:0
-            remove_keyboard disable
-            xrandr --output "$MAIN_SCREEN" --rotate right
-            rotate_cursor 0 1 0 -1 0 1 0 0 1
-            install_background right-up
+            #dbus-send --print-reply=literal --type=method_call --system --dest=org.freedesktop.UPower /org/freedesktop/UPower/KbdBacklight org.freedesktop.UPower.KbdBacklight.SetBrightness int32:0
+            # re-enable backlight
+            dbus-send --print-reply=literal --type=method_call --system --dest=org.freedesktop.UPower /org/freedesktop/UPower/KbdBacklight org.freedesktop.UPower.KbdBacklight.SetBrightness int32:1
+            #remove_keyboard disable
+            "$CWDDIR"/toggle-input-devices.sh enable
+            kscreen-doctor output.$MAIN_SCREEN.rotation.right
+            # xrandr --output "$MAIN_SCREEN" --rotate right
+            # rotate_cursor 0 1 0 -1 0 1 0 0 1
+            # install_background right-up
             ;;
         left-up)
             # disable backlight
             dbus-send --print-reply=literal --type=method_call --system --dest=org.freedesktop.UPower /org/freedesktop/UPower/KbdBacklight org.freedesktop.UPower.KbdBacklight.SetBrightness int32:0
-            remove_keyboard disable
-            xrandr --output "$MAIN_SCREEN" --rotate left
-            rotate_cursor 0 -1 1 1 0 0 0 0 1
-            install_background left-up
+            # remove_keyboard disable
+            "$CWDDIR"/toggle-input-devices.sh disable
+            kscreen-doctor output.$MAIN_SCREEN.rotation.right
+            # xrandr --output "$MAIN_SCREEN" --rotate left
+            # rotate_cursor 0 -1 1 1 0 0 0 0 1
+            # install_background left-up
             ;;
     esac
 done
